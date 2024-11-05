@@ -24,7 +24,7 @@ or
 $ make linux LHOST=192.168.X.X LPORT=1234
 ```
 
-Generate & use the server with:
+Generate & run the server with:
 
 ```bash
 # To `make` a server with empty default values for listening parameters - allow the server parameters to be changed on the fly if needed
