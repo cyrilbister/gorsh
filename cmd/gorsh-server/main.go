@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -19,11 +20,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+    Iface string
+    Port string
+    Host string
+)
+
 var opts struct {
-	Iface  string `short:"i" long:"host" description:"Interface address on which to bind" default:"127.0.0.1" required:"true"`
-	Port   string `short:"p" long:"port" description:"Port on which to bind" default:"8443" required:"true"`
-	Keys   string `short:"k" long:"keys" description:"Path to folder with server.{pem,key}" default:"./certs" required:"true"`
-	Socket string `short:"s" long:"socket" description:"Domain socket from which the program reads"`
+	Host      string `short:"H" long:"host" description:"IP address to bind to" required:"false"`
+	Iface     string `short:"i" long:"interface" description:"Interface name to resolve IP from" required:"false"`
+	Port      string `short:"p" long:"port" description:"Port to bind to" default:"13000" required:"true"`
+	Keys      string `short:"k" long:"keys" description:"Path to folder with server.{pem,key}" default:"./certs" required:"true"`
+	Socket    string `short:"s" long:"socket" description:"Domain socket to read from" required:"false"`
 }
 
 var sessions = make(map[string]*gomux.Session)
@@ -55,6 +63,15 @@ func init() {
 }
 
 func main() {
+	if Iface != "" {
+        opts.Iface = Iface
+    }
+	if Host != "" {
+        opts.Host = Host
+    }
+    if Port != "" {
+        opts.Port = Port
+    }
 	var listener net.Listener
 	var err error
 
@@ -67,12 +84,17 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.WithFields(log.Fields{"port": opts.Port, "host": opts.Iface}).Info("Listener started")
+
+		bindAddress, err := getBindAddress()
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.WithFields(log.Fields{"port": opts.Port, "host": bindAddress}).Info("Listener started")
 
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				log.Error(err)
+				log.Error("Listener Accept")
 				continue
 			}
 
@@ -81,8 +103,9 @@ func main() {
 				log.Error(err)
 				continue
 			}
-			time.Sleep(1 * time.Second) // Give socket time to establish
+			time.Sleep(10 * time.Second) // Give socket time to establish
 			go proxyConnToSocket(conn, sockF)
+			log.Info("Connection to socket successful")
 		}
 
 	} else {
@@ -107,6 +130,48 @@ func main() {
 	}
 }
 
+func getBindAddress() (string, error) {
+	if opts.Iface != "" {
+		// Si --interface est spécifié, récupérer l'IP de l'interface
+		ip, err := getInterfaceIP(opts.Iface)
+		if err != nil {
+			return "", err
+		}
+		return ip, nil
+	} else if opts.Host != "" {
+		// Si --host est spécifié, utiliser cette IP
+		return opts.Host, nil
+	} 
+	return "", fmt.Errorf("either --host or --interface must be specified")
+}
+
+func getInterfaceIP(interfaceName string) (string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+
+	for _, iface := range interfaces {
+		if iface.Name == interfaceName {
+			addrs, err := iface.Addrs()
+			if err != nil {
+				return "", err
+			}
+
+			for _, addr := range addrs {
+				switch v := addr.(type) {
+				case *net.IPNet:
+					if v.IP.To4() != nil { // Vérifier l'adresse IPv4
+						return v.IP.String(), nil
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("interface %s not found", interfaceName)
+}
+
 func newTLSListener() (net.Listener, error) {
 	pem := path.Join(opts.Keys, "server.pem")
 	key := path.Join(opts.Keys, "server.key")
@@ -115,10 +180,20 @@ func newTLSListener() (net.Listener, error) {
 		log.Fatal(err)
 	}
 
+	// Obtenir l'adresse IP de l'interface ou de l'hôte
+	bindAddress, err := getBindAddress()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Utiliser l'adresse IP obtenue dans connStr
+	connStr := fmt.Sprintf("%s:%s", bindAddress, opts.Port)
+	log.Infof("Binding to IP: %s on port %s", bindAddress, opts.Port)
+
 	config := &tls.Config{Certificates: []tls.Certificate{cer}}
-	connStr := fmt.Sprintf("%s:%s", opts.Iface, opts.Port)
 	return tls.Listen("tcp", connStr, config)
 }
+
 
 func startShell(conn net.Conn) {
 	log.WithFields(log.Fields{"port": opts.Port, "host": opts.Iface}).Info("Incoming")
@@ -184,21 +259,32 @@ func prepareTmux(conn net.Conn) (string, error) {
 		return "", fmt.Errorf("failed getting implant info: %w", err)
 	}
 
+	// Vérification de l'existence de la session avec une gestion spécifique de l'erreur exit status 1
 	exists, err := gomux.CheckSessionExists(hostname)
 	if err != nil {
-		return "", err
+		log.Warn(err)
+
+		// Si l'erreur est liée à "exit status 1" (tmux n'est pas en cours d'exécution), on ignore et continue
+		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
+			log.Warn("tmux not running, assuming session doesn't exist: %v", err)
+			exists = false // On considère que la session n'existe pas encore
+		} else {
+			// Si l'erreur est autre, on la retourne
+			err = fmt.Errorf("CheckSessionExists: %w", err)
+			return "", err
+		}
 	}
 
-	// not yet seen host
+	// Si la session n'existe pas encore
 	if !exists {
 		log.WithField("host", hostname).Info("new host connected, creating session")
 		sessions[hostname], err = gomux.NewSession(hostname)
 		if err != nil {
-			log.Warn(err)
+			log.Warn("Error creating new session: ", err)
 		}
 	}
 
-	// session in tmux, but not tracked with server yet
+	// Session existe déjà, mais n'est pas encore suivie
 	if exists && sessions[hostname] == nil {
 		log.WithField("host", hostname).Debug("creating new cached session")
 		sessions[hostname] = &gomux.Session{Name: hostname}
@@ -215,6 +301,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 
 	path, err := genTempFilename(username)
 	if err != nil {
+		err = fmt.Errorf("genTempFilename: %w", err)
 		return "", err
 	}
 
@@ -240,6 +327,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 	return path, nil
 }
 
+
 func proxyConnToSocket(conn net.Conn, sockF string) {
 	socket, err := net.Dial("unix", sockF)
 	if err != nil {
@@ -248,7 +336,6 @@ func proxyConnToSocket(conn net.Conn, sockF string) {
 	}
 	defer socket.Close()
 	defer os.Remove(sockF)
-
 	wg := sync.WaitGroup{}
 
 	// forward socket to tcp
@@ -266,7 +353,6 @@ func proxyConnToSocket(conn net.Conn, sockF string) {
 		defer wg.Done()
 		io.Copy(socket, conn)
 	})(socket, conn)
-
 	// keep from returning until sockets close so we
 	// can cleanup the socket file using `defer`
 	wg.Wait()
