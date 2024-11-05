@@ -2,7 +2,7 @@ module git.i.ctrl.red/blink/gorsh
 
 go 1.22.0
 
-toolchain go1.22.4
+toolchain go1.22.2
 
 require (
 	code.cloudfoundry.org/bytefmt v0.14.0
