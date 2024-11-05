@@ -77,7 +77,7 @@ target = $(word 1, $@)
 ##############
 all: $(PLATFORMS) shellcode dll ## makes all windows, shellcode, dll, linux, darwin targets
 
-linux: $(SRV_KEY) $(GARBLE) ## make the linux agent
+linux: $(SRV_KEY) ## make the linux agent
 	GOOS=${target} ${BUILD} \
 		-buildmode pie \
 		-ldflags ${LDFLAGS} \
