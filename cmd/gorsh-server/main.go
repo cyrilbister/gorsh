@@ -23,7 +23,7 @@ import (
 var (
     Iface string
     Port string
-    Host string
+	Host string
 )
 
 var opts struct {
@@ -142,7 +142,7 @@ func getBindAddress() (string, error) {
 		// Si --host est spécifié, utiliser cette IP
 		return opts.Host, nil
 	} 
-	return "", fmt.Errorf("either --host or --interface must be specified")
+	return "", fmt.Errorf("Either --host or --interface must be specified")
 }
 
 func getInterfaceIP(interfaceName string) (string, error) {
@@ -169,7 +169,7 @@ func getInterfaceIP(interfaceName string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("interface %s not found", interfaceName)
+	return "", fmt.Errorf("Interface %s not found", interfaceName)
 }
 
 func newTLSListener() (net.Listener, error) {
@@ -222,14 +222,14 @@ func implantInfo(conn net.Conn) (hostname, username string, err error) {
 	reader := bufio.NewReader(conn)
 	hostname, err = reader.ReadString('\n')
 	if err != nil {
-		err = fmt.Errorf("hostname read failed: %w", err)
+		err = fmt.Errorf("Hostname read failed: %w", err)
 		return
 	}
 	hostname = sanitizeforTmux(hostname)
 
 	username, err = reader.ReadString('\n')
 	if err != nil {
-		err = fmt.Errorf("username read failed: %w", err)
+		err = fmt.Errorf("Username read failed: %w", err)
 		return
 	}
 
@@ -240,14 +240,14 @@ func implantInfo(conn net.Conn) (hostname, username string, err error) {
 func genTempFilename(username string) (string, error) {
 	file, err := os.CreateTemp(".state", fmt.Sprintf("%s.*.sock", username))
 	if err != nil {
-		err = fmt.Errorf("temp file failed: %w", err)
+		err = fmt.Errorf("Temp file failed: %w", err)
 		return "", err
 	}
 	os.Remove(file.Name())
 
 	path, err := filepath.Abs(file.Name())
 	if err != nil {
-		err = fmt.Errorf("temp path read failed: %w", err)
+		err = fmt.Errorf("Temp path read failed: %w", err)
 		return "", err
 	}
 	return path, nil
@@ -256,7 +256,7 @@ func genTempFilename(username string) (string, error) {
 func prepareTmux(conn net.Conn) (string, error) {
 	hostname, username, err := implantInfo(conn)
 	if err != nil {
-		return "", fmt.Errorf("failed getting implant info: %w", err)
+		return "", fmt.Errorf("Failed getting implant info: %w", err)
 	}
 
 	// Vérification de l'existence de la session avec une gestion spécifique de l'erreur exit status 1
@@ -266,7 +266,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 
 		// Si l'erreur est liée à "exit status 1" (tmux n'est pas en cours d'exécution), on ignore et continue
 		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
-			log.Warn("tmux not running, assuming session doesn't exist: %v", err)
+			log.Warn("Tmux not running, assuming session doesn't exist: %v", err)
 			exists = false // On considère que la session n'existe pas encore
 		} else {
 			// Si l'erreur est autre, on la retourne
@@ -277,7 +277,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 
 	// Si la session n'existe pas encore
 	if !exists {
-		log.WithField("host", hostname).Info("new host connected, creating session")
+		log.WithField("host", hostname).Info("New host connected, creating session")
 		sessions[hostname], err = gomux.NewSession(hostname)
 		if err != nil {
 			log.Warn("Error creating new session: ", err)
@@ -286,7 +286,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 
 	// Session existe déjà, mais n'est pas encore suivie
 	if exists && sessions[hostname] == nil {
-		log.WithField("host", hostname).Debug("creating new cached session")
+		log.WithField("host", hostname).Debug("Creating new cached session")
 		sessions[hostname] = &gomux.Session{Name: hostname}
 	}
 
@@ -323,7 +323,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 	}
 
 	log.WithFields(log.Fields{"session": session.Name, "window": username}).
-		Info("new shell in tmux")
+		Info("New shell in tmux. Connecting to socket... ")
 	return path, nil
 }
 
@@ -331,7 +331,7 @@ func prepareTmux(conn net.Conn) (string, error) {
 func proxyConnToSocket(conn net.Conn, sockF string) {
 	socket, err := net.Dial("unix", sockF)
 	if err != nil {
-		log.WithField("err", err).Error("failed to dial sockF")
+		log.WithField("err", err).Error("Failed to dial sockF")
 		return
 	}
 	defer socket.Close()
