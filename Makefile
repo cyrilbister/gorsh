@@ -96,14 +96,14 @@ target = $(word 1, $@)
 ##############
 all: $(PLATFORMS) shellcode dll ## makes all windows, shellcode, dll, linux, darwin targets
 
-linux: $(SRV_KEY) ## make the linux agent
+linux: $(SRV_KEY) install ## make the linux agent
 	GOOS=${target} ${BUILD} \
 		-buildmode pie \
 		-ldflags ${LDFLAGS_AGENT} \
 		-o ${OUT}/${APP}_linux \
 		cmd/gorsh/main.go
 
-windows: $(SRV_KEY) ## make the windows agent
+windows: $(SRV_KEY) install ## make the windows agent
 	GOOS=${target} ${BUILD} \
 		-buildmode pie \
 		-ldflags ${LDFLAGS_AGENT} \
@@ -117,12 +117,12 @@ server: $(SRV_KEY) $(LIGOLO_BIN) install ## make the listening server
 		-o ${target} \
 		cmd/gorsh-server/main.go
 
-shellcode: $(GODONUT) windows ## generate PIC windows shellcode
+shellcode: $(GODONUT) install windows ## generate PIC windows shellcode
 	${GODONUT} --arch x64 --verbose \
 		--in ${OUT}/${APP}.windows \
 		--out ${OUT}/${APP}.windows.bin 
 
-dll:  ## creates a windows dll. exports are definded in `cmd/gorsh-dll/dllmain.go`
+dll: install ## creates a windows dll. exports are definded in `cmd/gorsh-dll/dllmain.go`
 	CGO_ENABLED=1 CC=${DLLCC} \
 	GOOS=windows ${BUILD} \
 		-buildmode=c-shared \
