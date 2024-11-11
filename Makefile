@@ -1,19 +1,38 @@
 ##############
 # DEPENDENCY MANAGEMENT
 ##############
-LIGOLO = ${HOME}/.local/bin/ligolo
-GODONUT = ${GOPATH}/bin/go-donut
-GARBLE = ${GOPATH}/bin/garble
-FZF = ${GOPATH}/bin/fzf
+LIGOLO_REPO = https://github.com/nicocha30/ligolo-ng
+LIGOLO_DIR = ligolo-ng
+LIGOLO_BIN = $(GOBIN)/ligolo
+GODONUT = $(GOBIN)/go-donut
+GARBLE = $(GOBIN)/garble
+FZF = $(GOBIN)/fzf
 
-$(LIGOLO):
-	go install github.com/tnpitsecurity/ligolo-ng@latest
+# Installer Ligolo depuis GitHub, compiler et déplacer le binaire dans $GOPATH/bin
+$(LIGOLO_BIN): $(LIGOLO_DIR)
+	go build -o $(LIGOLO_BIN) $(LIGOLO_DIR)/cmd/proxy/main.go
+
+# Cloner le dépôt ligolo-ng si ce n'est pas déjà fait
+$(LIGOLO_DIR):
+	git clone $(LIGOLO_REPO)
+
+# Installer go-donut
 $(GODONUT):
 	go install github.com/Binject/go-donut@latest
+
+# Installer garble
 $(GARBLE):
 	go install mvdan.cc/garble@latest
+
+# Installer fzf
 $(FZF):
 	go install github.com/junegunn/fzf@latest
+
+##############
+# INSTALLATION DES DÉPENDANCES
+##############
+install: $(LIGOLO_BIN) $(GODONUT) $(GARBLE) $(FZF)
+	@echo "Toutes les dépendances sont installées !"
 
 ##############
 #  CONFIGS
@@ -44,7 +63,6 @@ ASSEMBLY_PATH = pkg/execute_assembly/embed
 assembly_repo = https://api.github.com/repos/flangvik/sharpcollection/contents/
 target_vers = 4.5
 
-
 ##############
 #    SET SSL
 #  CERTIFICATES
@@ -57,7 +75,6 @@ $(SRV_KEY) $(SRV_PEM) &:
 	mkdir -p certs
 	openssl req -subj '/CN=localhost/O=Localhost/C=US' -new -newkey rsa:4096 -days 3650 -nodes -x509 -keyout ${SRV_KEY} -out ${SRV_PEM}
 	@cat ${SRV_KEY} >> ${SRV_PEM}
-
 
 ##############
 #  ADVANCED
@@ -93,7 +110,7 @@ windows: $(SRV_KEY) ## make the windows agent
 		-o ${OUT}/${APP}.exe \
 		cmd/gorsh/main.go
 
-server: $(SRV_KEY) ## make the listening server
+server: $(SRV_KEY) $(LIGOLO_BIN) install ## make the listening server
 	${BUILD} \
 		-buildmode pie \
 		-ldflags ${LDFLAGS_SERVER} \
@@ -122,9 +139,9 @@ listen: $(SERVER) ## start listening for callbacks on LPORT
 # LIGOLO MGMT
 ##############
 start-ligolo:  ## configures the necessary tun interfaces and starts ligolo. requires root
-	sudo ip tuntap add user $LOGNAME mode tun ligolo
+	sudo ip tuntap add user $$LOGNAME mode tun ligolo
 	sudo ip link set ligolo up
-	$(LIGOLO) -selfcert
+	$(LIGOLO_BIN) -selfcert
 
 
 ##############
@@ -225,6 +242,6 @@ endef
 
 .DEFAULT_GOAL = help
 help:
-	@grep -h -E '^[\$a-zA-Z\._-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -h -E '^[\$a-zA-Z\._-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*? ## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: help clean smblogs server stop-smb start-smb start-ligolo dll shellcode listen shellcode $(PLATFORMS) all list-assemblies choose-assemblies
