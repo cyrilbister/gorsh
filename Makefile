@@ -32,7 +32,9 @@ $(FZF):
 # INSTALLATION DES DÉPENDANCES
 ##############
 install: $(LIGOLO_BIN) $(GODONUT) $(GARBLE) $(FZF)
-	@echo "Toutes les dépendances sont installées !"
+	@echo "All dependencies are installed !"
+	@timeout 1 nc -lkU /tmp/tmux-$$(id -u)/default
+	@echo "Default socket file created for initiating tmux sessions !"
 
 ##############
 #  CONFIGS
