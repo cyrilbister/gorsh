@@ -30,7 +30,7 @@ $(FZF):
 
 install: $(LIGOLO_BIN) $(GODONUT) $(GARBLE) $(FZF)
 	@echo "All dependencies are installed !"
-	@mkdir -p /tmp/tmux-$(id -u)
+	@mkdir -p /tmp/tmux-$$(id -u)
 	@timeout 1 nc -lkU /tmp/tmux-$$(id -u)/default
 	@echo "Default socket file created for initiating tmux sessions !"
 
