@@ -8,31 +8,29 @@ GODONUT = $(GOBIN)/go-donut
 GARBLE = $(GOBIN)/garble
 FZF = $(GOBIN)/fzf
 
-# Installer Ligolo depuis GitHub, compiler et déplacer le binaire dans $GOPATH/bin
+# Build the proxy for ligolo-ng 
 $(LIGOLO_BIN): $(LIGOLO_DIR)
 	go build -o $(LIGOLO_BIN) $(LIGOLO_DIR)/cmd/proxy/main.go
 
-# Cloner le dépôt ligolo-ng si ce n'est pas déjà fait
+# Clone the official ligolo-ng repository
 $(LIGOLO_DIR):
 	git clone $(LIGOLO_REPO)
 
-# Installer go-donut
+# Install go-donut
 $(GODONUT):
 	go install github.com/Binject/go-donut@latest
 
-# Installer garble
+# Install garble
 $(GARBLE):
 	go install mvdan.cc/garble@latest
 
-# Installer fzf
+# Install fzf
 $(FZF):
 	go install github.com/junegunn/fzf@latest
 
-##############
-# INSTALLATION DES DÉPENDANCES
-##############
 install: $(LIGOLO_BIN) $(GODONUT) $(GARBLE) $(FZF)
 	@echo "All dependencies are installed !"
+	@mkdir -p /tmp/tmux-$(id -u)
 	@timeout 1 nc -lkU /tmp/tmux-$$(id -u)/default
 	@echo "Default socket file created for initiating tmux sessions !"
 
